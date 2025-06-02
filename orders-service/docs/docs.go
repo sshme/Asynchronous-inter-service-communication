@@ -50,6 +50,16 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/orders": {
+            "post": {
+                "description": "Create a new order with the provided details",
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Create a new order",
+                "responses": {}
+            }
         }
     }
 }`

@@ -29,6 +29,13 @@ paths:
       summary: Health check endpoint
       tags:
       - health
+  /orders:
+    post:
+      description: Create a new order with the provided details
+      responses: {}
+      summary: Create a new order
+      tags:
+      - orders
 produces:
 - application/json
 schemes:
