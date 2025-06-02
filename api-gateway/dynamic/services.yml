@@ -1,0 +1,30 @@
+http:
+  routers:
+    dashboard:
+      rule: "PathPrefix(`/dashboard`)"
+      service: "api@internal"
+      middlewares:
+        - "cors-headers"
+
+    orders-api:
+      rule: "PathPrefix(`/orders-api`)"
+      service: "orders-service"
+      middlewares:
+        - "cors-headers"
+    
+    payments-api:
+      rule: "PathPrefix(`/payments-api`)"
+      service: "payments-service"
+      middlewares:
+        - "cors-headers"
+
+  services:
+    orders-service:
+      loadBalancer:
+        servers:
+          - url: "http://orders-service:8000"
+    
+    payments-service:
+      loadBalancer:
+        servers:
+          - url: "http://payments-service:8001"

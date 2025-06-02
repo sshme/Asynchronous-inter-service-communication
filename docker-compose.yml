@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.4
+    container_name: traefik
+    ports:
+      - "80:80"     # HTTP
+      - "8080:8080" # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./api-gateway/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./api-gateway/dynamic:/etc/traefik/dynamic:ro
+    networks:
+      - microservices_network
+    restart: unless-stopped
+
+  orders-service:
+    build: ./orders-service
+    container_name: orders-service
+    networks:
+      - microservices_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.orders.loadbalancer.server.port=8000"
+    restart: unless-stopped
+  
+  payments-service:
+    build: ./payments-service
+    container_name: payments-service
+    networks:
+      - microservices_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.payments.loadbalancer.server.port=8001"
+    restart: unless-stopped
+
+networks:
+  microservices_network:
+    driver: bridge
