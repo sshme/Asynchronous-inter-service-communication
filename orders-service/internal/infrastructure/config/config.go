@@ -8,7 +8,9 @@ import (
 )
 
 type Config struct {
-	Port int `yaml:"server_host"`
+	Server struct {
+		Port int `yaml:"port"`
+	} `yaml:"server"`
 }
 
 type App struct {

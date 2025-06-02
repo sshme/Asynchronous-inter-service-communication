@@ -8,14 +8,16 @@ package di
 
 import (
 	"orders-service/internal/infrastructure/config"
+	"orders-service/internal/interfaces/api/router"
 )
 
 // Injectors from wire.go:
 
 func InitializeApplication() (*Application, error) {
+	routerRouter := router.NewRouter()
 	app := NewConfigApp()
 	configConfig := config.MustLoad(app)
-	application := NewApplication(configConfig)
+	application := NewApplication(routerRouter, configConfig)
 	return application, nil
 }
 
@@ -26,11 +28,13 @@ func NewConfigApp() *config.App {
 }
 
 type Application struct {
+	Router *router.Router
 	Config *config.Config
 }
 
-func NewApplication(config2 *config.Config) *Application {
+func NewApplication(router2 *router.Router, config2 *config.Config) *Application {
 	return &Application{
+		Router: router2,
 		Config: config2,
 	}
 }
