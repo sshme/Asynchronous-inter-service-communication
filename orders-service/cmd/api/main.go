@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"log"
+	"orders-service/internal/application/di"
+)
 
 func main() {
-	fmt.Println("Hello world from orders service")
+	_, err := di.InitializeApplication()
+	if err != nil {
+		log.Fatalf("Failed to initialize application: %v", err)
+	}
 }

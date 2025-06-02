@@ -19,6 +19,8 @@ RUN apk --no-cache add ca-certificates
 
 COPY --from=builder /app/bin/api /app/api
 
+COPY --from=builder /app/config/config.yaml /app/config/config.yaml
+
 WORKDIR /app
 
 EXPOSE 8000
