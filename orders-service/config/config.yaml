@@ -1,2 +1,8 @@
 server:
   port: 8000
+db:
+  host: orders-db
+  port: 5432
+  user: postgres
+  pass: postgres
+  name: orders_db

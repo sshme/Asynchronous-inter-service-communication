@@ -11,6 +11,13 @@ type Config struct {
 	Server struct {
 		Port int `yaml:"port"`
 	} `yaml:"server"`
+	Db struct {
+		Host string `yaml:"host"`
+		Port int    `yaml:"port"`
+		User string `yaml:"user"`
+		Pass string `yaml:"pass"`
+		Name string `yaml:"name"`
+	} `yaml:"db"`
 }
 
 type App struct {
