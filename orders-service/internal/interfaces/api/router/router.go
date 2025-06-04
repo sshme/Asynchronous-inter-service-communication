@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"orders-service/internal/application/service"
 	"orders-service/internal/interfaces/api/handler"
 )
 
@@ -11,11 +12,11 @@ type Router struct {
 	ordersHandler *handler.OrdersHandler
 }
 
-func NewRouter() *Router {
+func NewRouter(ordersService *service.OrdersService) *Router {
 	return &Router{
 		infoHandler:   handler.NewInfoHandler(),
 		docsHandler:   handler.NewDocsHandler(),
-		ordersHandler: handler.NewOrdersHandler(),
+		ordersHandler: handler.NewOrdersHandler(ordersService),
 	}
 }
 

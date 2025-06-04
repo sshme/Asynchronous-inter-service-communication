@@ -7,24 +7,47 @@
 package di
 
 import (
+	"github.com/google/wire"
+	"orders-service/internal/application/service"
 	"orders-service/internal/infrastructure/config"
+	"orders-service/internal/infrastructure/persistence/postgres"
 	"orders-service/internal/interfaces/api/router"
+	"orders-service/internal/interfaces/repository"
 )
 
 // Injectors from wire.go:
 
 func InitializeApplication() (*Application, error) {
-	routerRouter := router.NewRouter()
 	app := NewConfigApp()
 	configConfig := config.MustLoad(app)
+	postgresConfig := NewPostgresConfig(configConfig)
+	db, err := postgres.NewDb(postgresConfig)
+	if err != nil {
+		return nil, err
+	}
+	ordersRepository := postgres.NewOrdersRepository(db)
+	ordersService := service.NewOrdersService(ordersRepository)
+	routerRouter := router.NewRouter(ordersService)
 	application := NewApplication(routerRouter, configConfig)
 	return application, nil
 }
 
 // wire.go:
 
+var RepositorySet = wire.NewSet(postgres.NewOrdersRepository, wire.Bind(new(repository.OrdersRepository), new(*postgres.OrdersRepository)))
+
 func NewConfigApp() *config.App {
 	return config.NewApp("config/config.yaml")
+}
+
+func NewPostgresConfig(config2 *config.Config) *postgres.Config {
+	return &postgres.Config{
+		Host: config2.Db.Host,
+		Port: config2.Db.Port,
+		User: config2.Db.User,
+		Pass: config2.Db.Pass,
+		Name: config2.Db.Name,
+	}
 }
 
 type Application struct {

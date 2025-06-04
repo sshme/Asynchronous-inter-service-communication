@@ -20,9 +20,24 @@ services:
     container_name: orders-service
     networks:
       - microservices_network
+    depends_on:
+      - orders-db
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.orders.loadbalancer.server.port=8000"
+    restart: unless-stopped
+  
+  orders-db:
+    image: postgres:15-alpine
+    container_name: orders-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=orders_db
+    volumes:
+      - orders_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices_network
     restart: unless-stopped
   
   payments-service:
@@ -38,3 +53,6 @@ services:
 networks:
   microservices_network:
     driver: bridge
+
+volumes:
+  orders_db_data:
