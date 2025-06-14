@@ -12,7 +12,7 @@ services:
     ports:
       - "3000:8080"
     environment:
-      - VITE_API_URL=http://traefik:80
+      - VITE_API_URL=http://localhost:80
       - VITE_APP_ENV=production
     depends_on:
       - traefik
