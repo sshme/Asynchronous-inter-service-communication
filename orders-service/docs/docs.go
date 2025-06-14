@@ -54,12 +54,187 @@ const docTemplate = `{
         "/orders": {
             "post": {
                 "description": "Create a new order with the provided details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
-                    "orders"
+                    "Orders"
                 ],
                 "summary": "Create a new order",
-                "responses": {}
+                "parameters": [
+                    {
+                        "description": "Order creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.CreateOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orders.Order"
+                        }
+                    }
+                }
             }
+        },
+        "/orders/stream": {
+            "get": {
+                "description": "Establish SSE connection to receive real-time order status updates for a user",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Stream order status updates",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID to track orders for",
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE stream of order updates",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/user/{user_id}": {
+            "get": {
+                "description": "Get all orders for a specific user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Get user orders",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/orders.Order"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{order_id}": {
+            "get": {
+                "description": "Get the status of a specific order",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Get order status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Order ID",
+                        "name": "order_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orders.Order"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "handler.CreateOrderRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "orders.Order": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "errorReason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "paymentID": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/orders.OrderStatus"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "string"
+                }
+            }
+        },
+        "orders.OrderStatus": {
+            "type": "string",
+            "enum": [
+                "created",
+                "payment_pending",
+                "paid",
+                "payment_failed",
+                "completed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "OrderStatusCreated",
+                "OrderStatusPaymentPending",
+                "OrderStatusPaid",
+                "OrderStatusPaymentFailed",
+                "OrderStatusCompleted",
+                "OrderStatusCancelled"
+            ]
         }
     }
 }`

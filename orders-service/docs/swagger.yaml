@@ -1,4 +1,47 @@
 basePath: /orders-api
+definitions:
+  handler.CreateOrderRequest:
+    properties:
+      user_id:
+        type: string
+    type: object
+  orders.Order:
+    properties:
+      amount:
+        type: number
+      createdAt:
+        type: string
+      currency:
+        type: string
+      errorReason:
+        type: string
+      id:
+        type: string
+      paymentID:
+        type: string
+      status:
+        $ref: '#/definitions/orders.OrderStatus'
+      updatedAt:
+        type: string
+      userID:
+        type: string
+    type: object
+  orders.OrderStatus:
+    enum:
+    - created
+    - payment_pending
+    - paid
+    - payment_failed
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - OrderStatusCreated
+    - OrderStatusPaymentPending
+    - OrderStatusPaid
+    - OrderStatusPaymentFailed
+    - OrderStatusCompleted
+    - OrderStatusCancelled
 host: localhost
 info:
   contact:
@@ -31,11 +74,86 @@ paths:
       - health
   /orders:
     post:
+      consumes:
+      - application/json
       description: Create a new order with the provided details
-      responses: {}
+      parameters:
+      - description: Order creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateOrderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orders.Order'
       summary: Create a new order
       tags:
-      - orders
+      - Orders
+  /orders/{order_id}:
+    get:
+      description: Get the status of a specific order
+      parameters:
+      - description: Order ID
+        in: path
+        name: order_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orders.Order'
+      summary: Get order status
+      tags:
+      - Orders
+  /orders/stream:
+    get:
+      description: Establish SSE connection to receive real-time order status updates
+        for a user
+      parameters:
+      - description: User ID to track orders for
+        in: query
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream of order updates
+          schema:
+            type: string
+      summary: Stream order status updates
+      tags:
+      - Orders
+  /orders/user/{user_id}:
+    get:
+      description: Get all orders for a specific user
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/orders.Order'
+            type: array
+      summary: Get user orders
+      tags:
+      - Orders
 produces:
 - application/json
 schemes:

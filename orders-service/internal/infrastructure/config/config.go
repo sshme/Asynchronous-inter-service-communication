@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,6 +19,35 @@ type Config struct {
 		Pass string `yaml:"pass"`
 		Name string `yaml:"name"`
 	} `yaml:"db"`
+	Kafka struct {
+		Publisher struct {
+			IntervalMs int `yaml:"interval_ms"`
+			BatchSize  int `yaml:"batch_size"`
+			MaxRetries int `yaml:"max_retries"`
+		} `yaml:"publisher"`
+		Brokers []string `yaml:"brokers"`
+	} `yaml:"kafka"`
+}
+
+func (c *Config) GetPublisherInterval() time.Duration {
+	if c.Kafka.Publisher.IntervalMs <= 0 {
+		return time.Second
+	}
+	return time.Duration(c.Kafka.Publisher.IntervalMs) * time.Millisecond
+}
+
+func (c *Config) GetPublisherBatchSize() int {
+	if c.Kafka.Publisher.BatchSize <= 0 {
+		return 50
+	}
+	return c.Kafka.Publisher.BatchSize
+}
+
+func (c *Config) GetPublisherMaxRetries() int {
+	if c.Kafka.Publisher.MaxRetries <= 0 {
+		return 3
+	}
+	return c.Kafka.Publisher.MaxRetries
 }
 
 type App struct {
@@ -35,7 +65,12 @@ func MustLoad(app *App) *Config {
 	if err != nil {
 		panic(fmt.Sprintf("failed to open config file at %s: %v", app.path, err))
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			panic(fmt.Sprintf("failed to close config file at %s: %v", app.path, err))
+		}
+	}(file)
 
 	var config Config
 	decoder := yaml.NewDecoder(file)

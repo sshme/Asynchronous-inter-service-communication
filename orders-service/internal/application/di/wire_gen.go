@@ -9,10 +9,13 @@ package di
 import (
 	"github.com/google/wire"
 	"orders-service/internal/application/service"
+	"orders-service/internal/infrastructure/brokers/kafka"
 	"orders-service/internal/infrastructure/config"
 	"orders-service/internal/infrastructure/persistence/postgres"
+	"orders-service/internal/infrastructure/sse"
 	"orders-service/internal/interfaces/api/router"
 	"orders-service/internal/interfaces/repository"
+	"orders-service/pkg/random"
 )
 
 // Injectors from wire.go:
@@ -26,15 +29,30 @@ func InitializeApplication() (*Application, error) {
 		return nil, err
 	}
 	ordersRepository := postgres.NewOrdersRepository(db)
-	ordersService := service.NewOrdersService(ordersRepository)
-	routerRouter := router.NewRouter(ordersService)
-	application := NewApplication(routerRouter, configConfig)
+	outboxRepository := postgres.NewOutboxRepository(db)
+	inboxRepository := postgres.NewInboxRepository(db)
+	cryptoGenerator := random.NewCryptoGenerator()
+	manager := sse.NewManager()
+	ordersService := service.NewOrdersService(ordersRepository, outboxRepository, inboxRepository, cryptoGenerator, manager, db)
+	routerRouter := router.NewRouter(ordersService, manager)
+	kafkaConfig := kafka.NewConfig(configConfig)
+	outboxPublisher := NewOutboxPublisher(outboxRepository, kafkaConfig)
+	inboxProcessor := NewInboxProcessor(inboxRepository, kafkaConfig)
+	application := NewApplication(routerRouter, configConfig, outboxPublisher, inboxProcessor, ordersService, manager)
 	return application, nil
 }
 
 // wire.go:
 
-var RepositorySet = wire.NewSet(postgres.NewOrdersRepository, wire.Bind(new(repository.OrdersRepository), new(*postgres.OrdersRepository)))
+var RepositorySet = wire.NewSet(postgres.NewOrdersRepository, postgres.NewOutboxRepository, postgres.NewInboxRepository)
+
+var RandomSet = wire.NewSet(random.NewCryptoGenerator, wire.Bind(new(random.Generator), new(*random.CryptoGenerator)))
+
+var KafkaSet = wire.NewSet(kafka.NewConfig, NewOutboxPublisher,
+	NewInboxProcessor,
+)
+
+var SSESet = wire.NewSet(sse.NewManager)
 
 func NewConfigApp() *config.App {
 	return config.NewApp("config/config.yaml")
@@ -50,14 +68,49 @@ func NewPostgresConfig(config2 *config.Config) *postgres.Config {
 	}
 }
 
-type Application struct {
-	Router *router.Router
-	Config *config.Config
+func NewOutboxPublisher(
+	outboxRepo repository.OutboxRepository,
+	kafkaConfig *kafka.Config,
+) *kafka.OutboxPublisher {
+	publisher, err := kafka.NewOutboxPublisher(outboxRepo, kafkaConfig)
+	if err != nil {
+		panic(err)
+	}
+	return publisher
 }
 
-func NewApplication(router2 *router.Router, config2 *config.Config) *Application {
+func NewInboxProcessor(
+	inboxRepo repository.InboxRepository,
+	kafkaConfig *kafka.Config,
+) *kafka.InboxProcessor {
+	processor, err := kafka.NewInboxProcessor(inboxRepo, kafkaConfig)
+	if err != nil {
+		panic(err)
+	}
+	return processor
+}
+
+type Application struct {
+	Router          *router.Router
+	Config          *config.Config
+	OutboxPublisher *kafka.OutboxPublisher
+	InboxProcessor  *kafka.InboxProcessor
+	OrdersService   *service.OrdersService
+	SSEManager      *sse.Manager
+}
+
+func NewApplication(router2 *router.Router, config2 *config.Config,
+	outboxPublisher *kafka.OutboxPublisher,
+	inboxProcessor *kafka.InboxProcessor,
+	ordersService *service.OrdersService,
+	sseManager *sse.Manager,
+) *Application {
 	return &Application{
-		Router: router2,
-		Config: config2,
+		Router:          router2,
+		Config:          config2,
+		OutboxPublisher: outboxPublisher,
+		InboxProcessor:  inboxProcessor,
+		OrdersService:   ordersService,
+		SSEManager:      sseManager,
 	}
 }

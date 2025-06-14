@@ -26,6 +26,8 @@ COPY --from=builder /app/config/config.yaml /app/config/config.yaml
 
 COPY --from=builder /app/docs /app/docs
 
+COPY --from=builder /app/internal/infrastructure/persistence/postgres/migrations /app/internal/infrastructure/persistence/postgres/migrations
+
 WORKDIR /app
 
 EXPOSE 8000

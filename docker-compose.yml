@@ -1,6 +1,86 @@
 version: '3.8'
 
 services:
+  orders-client:
+    build:
+      context: orders-client
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:80
+        - VITE_APP_ENV=production
+    container_name: orders-client
+    ports:
+      - "3000:8080"
+    environment:
+      - VITE_API_URL=http://traefik:80
+      - VITE_APP_ENV=production
+    depends_on:
+      - traefik
+    networks:
+      - microservices_network
+
+  # Apache Kafka Infrastructure
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - microservices_network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - microservices_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka:29092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - microservices_network
+    restart: unless-stopped
+
+  # API Gateway
   traefik:
     image: traefik:v3.4
     container_name: traefik
@@ -15,13 +95,17 @@ services:
       - microservices_network
     restart: unless-stopped
 
+  # Microservices
   orders-service:
     build: ./orders-service
     container_name: orders-service
     networks:
       - microservices_network
     depends_on:
-      - orders-db
+      orders-db:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.orders.loadbalancer.server.port=8000"
@@ -45,9 +129,27 @@ services:
     container_name: payments-service
     networks:
       - microservices_network
+    depends_on:
+      payments-db:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.payments.loadbalancer.server.port=8001"
+    restart: unless-stopped
+  
+  payments-db:
+    image: postgres:15-alpine
+    container_name: payments-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=payments_db
+    volumes:
+      - payments_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices_network
     restart: unless-stopped
 
 networks:
@@ -56,3 +158,7 @@ networks:
 
 volumes:
   orders_db_data:
+  payments_db_data:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:

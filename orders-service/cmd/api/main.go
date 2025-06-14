@@ -40,6 +40,20 @@ func main() {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	app.InboxProcessor.RegisterHandler("payment.completed", app.OrdersService.ProcessPaymentCompleted)
+	app.InboxProcessor.RegisterHandler("payment.failed", app.OrdersService.ProcessPaymentFailed)
+
+	app.OutboxPublisher.Start(ctx)
+	defer app.OutboxPublisher.Stop()
+
+	app.InboxProcessor.Start(ctx)
+	defer app.InboxProcessor.Stop()
+
+	app.SSEManager.Start(ctx)
+
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", app.Config.Server.Port),
 		Handler: app.Router.SetupRoutes(),
@@ -49,21 +63,27 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("Starting server on port %d", app.Config.Server.Port)
+		log.Printf("Starting Orders Service on port %d", app.Config.Server.Port)
+		log.Printf("Outbox Publisher started for event publishing")
+		log.Printf("Inbox Processor started for payment event handling")
+		log.Printf("SSE Manager started for real-time order status updates")
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
 	<-quit
-	log.Println("Shutting down server...")
+	log.Println("Shutting down Orders Service...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	app.InboxProcessor.Stop()
+	app.OutboxPublisher.Stop()
 
-	if err := server.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
-	log.Println("Server exited gracefully")
+	log.Println("Orders Service exited gracefully")
 }

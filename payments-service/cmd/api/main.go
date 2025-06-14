@@ -2,7 +2,7 @@ package main
 
 // @title           Payments Service API
 // @version         1.0
-// @description     A service for uploading and retrieving files
+// @description     A service for processing payments and managing user accounts with transactional inbox/outbox patterns
 // @termsOfService  http://swagger.io/terms/
 
 // @contact.name   API Support
@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"payments-service/internal/application/di"
+	"payments-service/internal/infrastructure/persistence/postgres"
 	"syscall"
 	"time"
 
@@ -40,6 +41,22 @@ func main() {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
+	migrationsPath := "internal/infrastructure/persistence/postgres/migrations"
+	if err := postgres.RunMigrations(app.DB, migrationsPath); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	app.InboxProcessor.RegisterHandler("order.created", app.PaymentsService.ProcessOrderCreated)
+
+	log.Println("Starting inbox processor...")
+	app.InboxProcessor.Start(ctx)
+
+	log.Println("Starting outbox publisher...")
+	app.OutboxPublisher.Start(ctx)
+
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", app.Config.Server.Port),
 		Handler: app.Router.SetupRoutes(),
@@ -49,7 +66,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("Starting server on port %d", app.Config.Server.Port)
+		log.Printf("Starting HTTP server on port %d", app.Config.Server.Port)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start server: %v", err)
 		}
@@ -58,11 +75,21 @@ func main() {
 	<-quit
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	log.Println("Stopping inbox processor...")
+	app.InboxProcessor.Stop()
 
-	if err := server.Shutdown(ctx); err != nil {
+	log.Println("Stopping outbox publisher...")
+	app.OutboxPublisher.Stop()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	if err := app.DB.Close(); err != nil {
+		log.Printf("Error closing database connection: %v", err)
 	}
 
 	log.Println("Server exited gracefully")

@@ -6,3 +6,10 @@ db:
   user: postgres
   pass: postgres
   name: orders_db
+kafka:
+  publisher:
+    interval_ms: 1000
+    batch_size: 10
+    max_retries: 3
+  brokers:
+    - "kafka:29092"

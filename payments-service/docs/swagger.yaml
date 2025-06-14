@@ -1,11 +1,58 @@
 basePath: /payments-api
+definitions:
+  handler.AccountInfoResponse:
+    properties:
+      balance:
+        type: number
+      created_at:
+        type: string
+      id:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.CreateAccountResponse:
+    properties:
+      balance:
+        type: number
+      created_at:
+        type: string
+      id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  handler.TopUpAccountRequest:
+    properties:
+      amount:
+        type: number
+    type: object
+  handler.TopUpAccountResponse:
+    properties:
+      balance:
+        type: number
+      id:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
 host: localhost
 info:
   contact:
     email: support@example.com
     name: API Support
     url: http://www.example.com/support
-  description: A service for uploading and retrieving files
+  description: A service for processing payments and managing user accounts with transactional
+    inbox/outbox patterns
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
@@ -13,6 +60,87 @@ info:
   title: Payments Service API
   version: "1.0"
 paths:
+  /accounts:
+    post:
+      consumes:
+      - application/json
+      description: Create a new account with auto-generated user_id using UUIDv7
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.CreateAccountResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Create new account
+      tags:
+      - Accounts
+  /accounts/{user_id}:
+    get:
+      description: Get account details by user ID
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.AccountInfoResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Get account information
+      tags:
+      - Accounts
+  /accounts/{user_id}/topup:
+    post:
+      consumes:
+      - application/json
+      description: Add funds to an existing account
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: Top up request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.TopUpAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TopUpAccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Top up account balance
+      tags:
+      - Accounts
   /info:
     get:
       consumes:

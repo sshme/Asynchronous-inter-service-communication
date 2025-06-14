@@ -7,34 +7,118 @@
 package di
 
 import (
+	"database/sql"
+	"github.com/google/wire"
+	"payments-service/internal/application/service"
+	"payments-service/internal/infrastructure/brokers/kafka"
 	"payments-service/internal/infrastructure/config"
+	"payments-service/internal/infrastructure/persistence/postgres"
+	"payments-service/internal/interfaces/api/handler"
 	"payments-service/internal/interfaces/api/router"
+	"payments-service/internal/interfaces/repository"
+	"payments-service/pkg/random"
 )
 
 // Injectors from wire.go:
 
 func InitializeApplication() (*Application, error) {
-	routerRouter := router.NewRouter()
 	app := NewConfigApp()
 	configConfig := config.MustLoad(app)
-	application := NewApplication(routerRouter, configConfig)
+	postgresConfig := NewPostgresConfig(configConfig)
+	db, err := postgres.NewDb(postgresConfig)
+	if err != nil {
+		return nil, err
+	}
+	accountRepository := postgres.NewAccountRepository(db)
+	accountService := service.NewAccountService(accountRepository)
+	accountsHandler := NewAccountsHandler(accountService)
+	routerRouter := router.NewRouter(accountsHandler)
+	paymentsRepository := postgres.NewPaymentsRepository(db)
+	inboxRepository := postgres.NewInboxRepository(db)
+	outboxRepository := postgres.NewOutboxRepository(db)
+	cryptoGenerator := random.NewCryptoGenerator()
+	paymentsService := service.NewPaymentsService(db, paymentsRepository, accountRepository, inboxRepository, outboxRepository, cryptoGenerator)
+	kafkaConfig := kafka.NewConfig(configConfig)
+	outboxPublisher := NewOutboxPublisher(outboxRepository, kafkaConfig)
+	inboxProcessor := NewInboxProcessor(inboxRepository, kafkaConfig)
+	application := NewApplication(routerRouter, configConfig, paymentsService, accountService, outboxPublisher, inboxProcessor, db)
 	return application, nil
 }
 
 // wire.go:
 
+var RepositorySet = wire.NewSet(postgres.NewAccountRepository, postgres.NewPaymentsRepository, postgres.NewInboxRepository, postgres.NewOutboxRepository)
+
+var RandomSet = wire.NewSet(random.NewCryptoGenerator, wire.Bind(new(random.Generator), new(*random.CryptoGenerator)))
+
+var KafkaSet = wire.NewSet(kafka.NewConfig, NewOutboxPublisher,
+	NewInboxProcessor,
+)
+
 func NewConfigApp() *config.App {
 	return config.NewApp("config/config.yaml")
 }
 
-type Application struct {
-	Router *router.Router
-	Config *config.Config
+func NewPostgresConfig(config2 *config.Config) *postgres.Config {
+	return &postgres.Config{
+		Host: config2.Db.Host,
+		Port: config2.Db.Port,
+		User: config2.Db.User,
+		Pass: config2.Db.Pass,
+		Name: config2.Db.Name,
+	}
 }
 
-func NewApplication(router2 *router.Router, config2 *config.Config) *Application {
+func NewOutboxPublisher(
+	outboxRepo repository.OutboxRepository,
+	kafkaConfig *kafka.Config,
+) *kafka.OutboxPublisher {
+	publisher, err := kafka.NewOutboxPublisher(outboxRepo, kafkaConfig)
+	if err != nil {
+		panic(err)
+	}
+	return publisher
+}
+
+func NewInboxProcessor(
+	inboxRepo repository.InboxRepository,
+	kafkaConfig *kafka.Config,
+) *kafka.InboxProcessor {
+	processor, err := kafka.NewInboxProcessor(inboxRepo, kafkaConfig)
+	if err != nil {
+		panic(err)
+	}
+	return processor
+}
+
+func NewAccountsHandler(accountService *service.AccountService) *handler.AccountsHandler {
+	return handler.NewAccountsHandler(accountService)
+}
+
+type Application struct {
+	Router          *router.Router
+	Config          *config.Config
+	PaymentsService *service.PaymentsService
+	AccountService  *service.AccountService
+	OutboxPublisher *kafka.OutboxPublisher
+	InboxProcessor  *kafka.InboxProcessor
+	DB              *sql.DB
+}
+
+func NewApplication(router2 *router.Router, config2 *config.Config,
+	paymentsService *service.PaymentsService,
+	accountService *service.AccountService,
+	outboxPublisher *kafka.OutboxPublisher,
+	inboxProcessor *kafka.InboxProcessor,
+	db *sql.DB,
+) *Application {
 	return &Application{
-		Router: router2,
-		Config: config2,
+		Router:          router2,
+		Config:          config2,
+		PaymentsService: paymentsService,
+		AccountService:  accountService,
+		OutboxPublisher: outboxPublisher,
+		InboxProcessor:  inboxProcessor,
+		DB:              db,
 	}
 }

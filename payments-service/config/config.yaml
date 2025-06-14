@@ -1,2 +1,17 @@
 server:
   port: 8001
+db:
+  host: payments-db
+  port: 5432
+  user: postgres
+  pass: postgres
+  name: payments_db
+kafka:
+  publisher:
+    interval_ms: 1000
+    batch_size: 10
+    max_retries: 3
+  consumer:
+    group_id: "payments-service-group"
+  brokers:
+    - "kafka:29092"
