@@ -1,4 +1,5 @@
 # Конструирование программного обеспечения
+[![Go CI](https://github.com/sham/asynchronous-inter-service-communication/actions/workflows/ci.yml/badge.svg)](https://github.com/sham/asynchronous-inter-service-communication/actions/workflows/ci.yml)
 > Контрольная работа №3 <br> Асинхронное межсервисное взаимодействие.
 
 ## Описание системы
@@ -83,7 +84,7 @@ graph TB
 **Orders service <br> Payments service**
 ```sh
 wire ./... # di gen
-test ./... # test
+go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out # test
 swag init -g cmd/api/main.go # docs gen
 ```
 

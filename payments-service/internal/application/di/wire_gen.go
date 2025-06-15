@@ -31,7 +31,7 @@ func InitializeApplication() (*Application, error) {
 	}
 	accountRepository := postgres.NewAccountRepository(db)
 	accountService := service.NewAccountService(accountRepository)
-	accountsHandler := NewAccountsHandler(accountService)
+	accountsHandler := handler.NewAccountsHandler(accountService)
 	routerRouter := router.NewRouter(accountsHandler)
 	paymentsRepository := postgres.NewPaymentsRepository(db)
 	inboxRepository := postgres.NewInboxRepository(db)
@@ -50,6 +50,10 @@ func InitializeApplication() (*Application, error) {
 var RepositorySet = wire.NewSet(postgres.NewAccountRepository, postgres.NewPaymentsRepository, postgres.NewInboxRepository, postgres.NewOutboxRepository)
 
 var RandomSet = wire.NewSet(random.NewCryptoGenerator, wire.Bind(new(random.Generator), new(*random.CryptoGenerator)))
+
+var ServiceSet = wire.NewSet(service.NewPaymentsService, service.NewAccountService)
+
+var HandlerSet = wire.NewSet(handler.NewAccountsHandler)
 
 var KafkaSet = wire.NewSet(kafka.NewConfig, NewOutboxPublisher,
 	NewInboxProcessor,
@@ -89,10 +93,6 @@ func NewInboxProcessor(
 		panic(err)
 	}
 	return processor
-}
-
-func NewAccountsHandler(accountService *service.AccountService) *handler.AccountsHandler {
-	return handler.NewAccountsHandler(accountService)
 }
 
 type Application struct {

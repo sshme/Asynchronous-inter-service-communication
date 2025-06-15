@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
+
+	"github.com/gofrs/uuid"
 
 	"payments-service/internal/domain/account"
 	"payments-service/internal/domain/inbox"
@@ -13,21 +16,26 @@ import (
 	"payments-service/internal/domain/payments"
 	"payments-service/internal/interfaces/repository"
 	"payments-service/pkg/random"
-
-	"github.com/gofrs/uuid"
 )
 
+type DBTX interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
 type PaymentsService struct {
-	db              *sql.DB
-	paymentsRepo    repository.PaymentsRepository
-	accountRepo     repository.AccountRepository
-	inboxRepo       repository.InboxRepository
-	outboxRepo      repository.OutboxRepository
-	randomGenerator random.Generator
+	db                  DBTX
+	paymentsRepo        repository.PaymentsRepository
+	accountRepo         repository.AccountRepository
+	inboxRepo           repository.InboxRepository
+	outboxRepo          repository.OutboxRepository
+	randomGenerator     random.Generator
+	maxRetries          int
+	retryDelay          time.Duration
+	outboxProcessorStop chan bool
 }
 
 func NewPaymentsService(
-	db *sql.DB,
+	db DBTX,
 	paymentsRepo repository.PaymentsRepository,
 	accountRepo repository.AccountRepository,
 	inboxRepo repository.InboxRepository,
@@ -35,12 +43,15 @@ func NewPaymentsService(
 	randomGenerator random.Generator,
 ) *PaymentsService {
 	return &PaymentsService{
-		db:              db,
-		paymentsRepo:    paymentsRepo,
-		accountRepo:     accountRepo,
-		inboxRepo:       inboxRepo,
-		outboxRepo:      outboxRepo,
-		randomGenerator: randomGenerator,
+		db:                  db,
+		paymentsRepo:        paymentsRepo,
+		accountRepo:         accountRepo,
+		inboxRepo:           inboxRepo,
+		outboxRepo:          outboxRepo,
+		randomGenerator:     randomGenerator,
+		maxRetries:          3,
+		retryDelay:          5 * time.Second,
+		outboxProcessorStop: make(chan bool),
 	}
 }
 

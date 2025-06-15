@@ -30,6 +30,15 @@ var RandomSet = wire.NewSet(
 	wire.Bind(new(random.Generator), new(*random.CryptoGenerator)),
 )
 
+var ServiceSet = wire.NewSet(
+	service.NewPaymentsService,
+	service.NewAccountService,
+)
+
+var HandlerSet = wire.NewSet(
+	handler.NewAccountsHandler,
+)
+
 var KafkaSet = wire.NewSet(
 	kafka.NewConfig,
 	NewOutboxPublisher,
@@ -43,12 +52,12 @@ func InitializeApplication() (*Application, error) {
 		NewPostgresConfig,
 		RepositorySet,
 		RandomSet,
+		ServiceSet,
+		HandlerSet,
 		KafkaSet,
-		service.NewPaymentsService,
-		service.NewAccountService,
-		NewAccountsHandler,
 		router.NewRouter,
 		postgres.NewDb,
+		wire.Bind(new(service.DBTX), new(*sql.DB)),
 		NewApplication,
 	)
 
@@ -89,10 +98,6 @@ func NewInboxProcessor(
 		panic(err)
 	}
 	return processor
-}
-
-func NewAccountsHandler(accountService *service.AccountService) *handler.AccountsHandler {
-	return handler.NewAccountsHandler(accountService)
 }
 
 type Application struct {
