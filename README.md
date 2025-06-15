@@ -1,5 +1,6 @@
 # Конструирование программного обеспечения
-[![Go CI](https://github.com/sham/asynchronous-inter-service-communication/actions/workflows/ci.yml/badge.svg)](https://github.com/sham/asynchronous-inter-service-communication/actions/workflows/ci.yml)
+[![Go CI](https://github.com/sshme/Asynchronous-inter-service-communication/actions/workflows/ci.yml/badge.svg)](https://github.com/sshme/Asynchronous-inter-service-communication/actions/workflows/ci.yml)
+
 > Контрольная работа №3 <br> Асинхронное межсервисное взаимодействие.
 
 ## Описание системы
