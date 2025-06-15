@@ -25,88 +25,57 @@
 ## Схема работы
 ```mermaid
 graph TB
-    User
-    Client["React SPA"]
-    Dashboard["Dashboard"]
-    
-    ApiGateway["API Gateway<br/>Traefik"]
-    
-    OrdersService["Orders Service"]
-    PaymentsService["Payments Service"]
+    subgraph "User & Client"
+        User
+        Client["React SPA"]
+    end
 
-    OrdersSwagger["swagger docs"]
-    PaymentsSwagger["swagger docs"]
-    
-    OrdersDB["Orders DB"]
-    PaymentsDB["Payments DB"]
-    
-    OrdersOutbox["Orders Outbox"]
-    PaymentsOutbox["Payments Outbox"]
-    
-    OrdersInbox["Orders Inbox<br/>Exactly-Once"]
-    PaymentsInbox["Payments Inbox<br/>Exactly-Once"]
-    
-    DeduplicationLayer["Deduplication Layer<br/>EventID uniqueness"]
-    IdempotencyLayer["Idempotency Layer<br/>Check existing payments"]
-    
-    Kafka["Apache Kafka<br/>Topics: orders-events, payments-events<br/>EventID per message"]
-    Zookeeper["Zookeeper"]
-    KafkaUI["Kafka UI"]
+    subgraph "Gateway & Infrastructure"
+        ApiGateway["API Gateway<br/>Traefik"]
+        Kafka["Apache Kafka<br/>Topics: orders-events, payments-events"]
+        Redis["Redis<br/>Pub/Sub"]
+    end
+
+    subgraph "Services"
+        OrdersService["Orders Service<br/>(Multiple Replicas)"]
+        PaymentsService["Payments Service"]
+    end
+
+    subgraph "Databases & Tables"
+        OrdersDB["Orders DB<br/>(orders, outbox, inbox)"]
+        PaymentsDB["Payments DB<br/>(payments, outbox, inbox)"]
+    end
     
     User --> Client
-    User --> ApiGateway
-    Client --> ApiGateway
+    Client -->|REST API| ApiGateway
+    Client -.->|SSE Connection| OrdersService
     
-    ApiGateway -->|"/orders-api/*"| OrdersService
-    ApiGateway -->|"/payments-api/*"| PaymentsService
-    ApiGateway -->|"/dashboard"| Dashboard
-    
-    OrdersService --> OrdersDB
-    PaymentsService --> PaymentsDB
+    ApiGateway -->|/orders-api/| OrdersService
+    ApiGateway -->|/payments-api/| PaymentsService
 
-    PaymentsService -->|"/payments-api/docs"| PaymentsSwagger
-    OrdersService -->|"/orders-api/docs"| OrdersSwagger
+    OrdersService -- "Write Order & Outbox msg (atomic)" --> OrdersDB
+    OrdersService -- "Publish 'order.created'" --> Kafka
     
-    OrdersOutbox --> OrdersDB
-    OrdersOutbox -->|"Publish Events<br/>with unique EventID<br/>(order.created,<br/>order.updated,<br/>order.completed)"| Kafka
+    Kafka -- "Consume 'order.created'" --> PaymentsService
+    PaymentsService -- "Process payment<br/>Write Payment & Outbox msg (atomic)" --> PaymentsDB
+    PaymentsService -- "Publish 'payment.completed'" --> Kafka
+
+    Kafka -- "Consume 'payment.completed'<br/>(any replica)" --> OrdersService
+    OrdersService -- "Update Order in DB" --> OrdersDB
+    OrdersService -- "Publish status to Redis" --> Redis
     
-    PaymentsOutbox --> PaymentsDB  
-    PaymentsOutbox -->|"Publish Events<br/>with unique EventID<br/>(payment.completed,<br/>payment.failed)"| Kafka
-    
-    Kafka -->|"IsEventProcessed()"| PaymentsInbox
-    PaymentsInbox -->|"UNIQUE constraint"| DeduplicationLayer
-    DeduplicationLayer -->|"Event not processed"| PaymentsDB
-    PaymentsInbox -->|"Idempotent Check<br/>GetByOrderID()"| IdempotencyLayer
-    IdempotencyLayer -->|"Check existing payment"| PaymentsDB
-    IdempotencyLayer -->|"Create or use existing"| PaymentsService
-    
-    Kafka -->|"IsEventProcessed()"| OrdersInbox
-    OrdersInbox -->|"UNIQUE constraint"| DeduplicationLayer
-    DeduplicationLayer -->|"Event not processed"| OrdersDB
-    OrdersInbox -->|"Idempotent Processing"| OrdersService
-    OrdersService -->|"Atomic Transaction<br/>Order + Outbox + Status"| OrdersDB
-    
-    Kafka -.->|"Cluster<br/>Coordination"| Zookeeper
-    KafkaUI -.-> Kafka
-    
-    DeduplicationLayer -.->|"Prevents duplicate<br/>processing"| IdempotencyLayer
-    IdempotencyLayer -.->|"Safe re-execution"| PaymentsService
+    Redis -- "SUBSCRIBED by ALL replicas" --> OrdersService
+    OrdersService -- "Send update via SSE<br/>(only replica with connection)" --> Client
     
     classDef userClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000
     classDef serviceClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
     classDef dbClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px,color:#000
-    classDef kafkaClass fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
-    classDef outboxClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
-    classDef inboxClass fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px,color:#000
-    classDef exactlyOnceClass fill:#fff8e1,stroke:#f57c00,stroke-width:3px,color:#000
+    classDef infraClass fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
     
-    class User,Client,Dashboard userClass
-    class ApiGateway,OrdersService,PaymentsService serviceClass
+    class User,Client userClass
+    class OrdersService,PaymentsService serviceClass
     class OrdersDB,PaymentsDB dbClass
-    class Kafka,Zookeeper,KafkaUI kafkaClass
-    class OrdersOutbox,PaymentsOutbox outboxClass
-    class OrdersInbox,PaymentsInbox inboxClass
-    class DeduplicationLayer,IdempotencyLayer exactlyOnceClass
+    class ApiGateway,Kafka,Redis infraClass
 ```
 
 ### Быстрые команды
