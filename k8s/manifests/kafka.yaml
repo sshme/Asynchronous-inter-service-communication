@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: microservices
+  labels:
+    app: zookeeper
+spec:
+  ports:
+  - port: 2181
+    name: client
+  clusterIP: None
+  selector:
+    app: zookeeper
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: microservices
+spec:
+  serviceName: "zookeeper"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: bitnami/zookeeper:3.8
+        ports:
+        - containerPort: 2181
+          name: client
+        env:
+        - name: ALLOW_ANONYMOUS_LOGIN
+          value: "yes"
+        volumeMounts:
+        - name: zookeeper-data
+          mountPath: /bitnami/zookeeper
+  volumeClaimTemplates:
+  - metadata:
+      name: zookeeper-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: microservices
+  labels:
+    app: kafka
+spec:
+  ports:
+  - port: 9092
+    name: plaintext
+  selector:
+    app: kafka
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: microservices
+spec:
+  serviceName: "kafka"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+      - name: kafka
+        image: bitnami/kafka:3.5
+        ports:
+        - containerPort: 9092
+          name: plaintext
+        env:
+        - name: KAFKA_CFG_ZOOKEEPER_CONNECT
+          value: "zookeeper:2181"
+        - name: KAFKA_CFG_ADVERTISED_LISTENERS
+          value: "PLAINTEXT://kafka:9092"
+        - name: ALLOW_PLAINTEXT_LISTENER
+          value: "yes"
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /bitnami/kafka
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 1Gi 

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-service
+  namespace: microservices
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payments-service
+  template:
+    metadata:
+      labels:
+        app: payments-service
+    spec:
+      containers:
+      - name: payments-service
+        image: payments-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8001
+        livenessProbe:
+          httpGet:
+            path: /payments-api/health
+            port: 8001
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /payments-api/health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: "/app/config"
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: payments-service-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-service
+  namespace: microservices
+spec:
+  selector:
+    app: payments-service
+  ports:
+    - protocol: TCP
+      port: 8001
+      targetPort: 8001 

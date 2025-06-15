@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-db
+  namespace: microservices
+  labels:
+    app: payments-db
+spec:
+  ports:
+    - port: 5432
+      name: postgres
+  clusterIP: None
+  selector:
+    app: payments-db
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: payments-db
+  namespace: microservices
+spec:
+  serviceName: "payments-db"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payments-db
+  template:
+    metadata:
+      labels:
+        app: payments-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          value: "payments_db"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "postgres"
+        volumeMounts:
+        - name: payments-db-data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: payments-db-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 1Gi 

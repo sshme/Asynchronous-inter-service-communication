@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  namespace: microservices
+  labels:
+    app: orders-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: orders-service
+  template:
+    metadata:
+      labels:
+        app: orders-service
+    spec:
+      containers:
+      - name: orders-service
+        image: orders-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /orders-api/info
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /orders-api/info
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: orders-service-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-service
+  namespace: microservices
+  labels:
+    app: payments-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: payments-service
+  template:
+    metadata:
+      labels:
+        app: payments-service
+    spec:
+      containers:
+      - name: payments-service
+        image: payments-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /payments-api/info
+            port: 8001
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /payments-api/info
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: payments-service-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-client
+  namespace: microservices
+  labels:
+    app: orders-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-client
+  template:
+    metadata:
+      labels:
+        app: orders-client
+    spec:
+      containers:
+      - name: orders-client
+        image: orders-client:k8s
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80 

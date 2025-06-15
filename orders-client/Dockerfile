@@ -12,7 +12,7 @@ RUN pnpm i
 
 COPY . .
 
-ARG VITE_API_URL=http://traefik:80
+ARG VITE_API_URL=""
 ARG VITE_APP_ENV=production
 
 ENV VITE_API_URL=$VITE_API_URL

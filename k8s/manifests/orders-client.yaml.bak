@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-client
+  namespace: microservices
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-client
+  template:
+    metadata:
+      labels:
+        app: orders-client
+    spec:
+      containers:
+      - name: orders-client
+        image: orders-client:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+        env:
+        - name: VITE_API_URL
+          value: "http://192.168.49.2"
+        - name: VITE_APP_ENV
+          value: "production"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-client
+  namespace: microservices
+spec:
+  selector:
+    app: orders-client
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080 

@@ -7,11 +7,13 @@
 
 ## Особенности реализации
 
-Использование **SSE** (server-sent events) вместо WebSockets:
-1. Одностороннее общение
-2. Проще в использовании (Автоматическое переподключение)
+1. Использование **SSE** (server-sent events) вместо WebSockets:
+    1. Одностороннее общение
+    2. Проще в использовании (Автоматическое переподключение)
 
-Использование uuid v7 для id сущностей (часть доменного слоя).
+2. Использование uuid v7 для id сущностей (часть доменного слоя).
+
+3. Domain driven design
 
 ## Функционал
 
@@ -125,4 +127,13 @@ pnpm run dev # run in dev mode
 **Запуск**
 ```sh
 docker-compose up
+```
+
+**Запуск в minikube**
+> запустит 3 реплики <i>orders-service</i> и <i>payments-service</i>
+```sh
+minikube start
+./k8s/build-images.sh
+./k8s/deploy.sh
+minikube tunnel
 ```
