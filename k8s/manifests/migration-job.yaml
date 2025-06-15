@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: orders-service-migration
+  namespace: microservices
+spec:
+  template:
+    spec:
+      containers:
+      - name: migrator
+        image: orders-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["./api", "migrate"]
+      restartPolicy: Never
+  backoffLimit: 4 

@@ -130,7 +130,7 @@ docker-compose up
 ```
 
 **Запуск в minikube**
-> запустит 3 реплики <i>orders-service</i> и <i>payments-service</i>
+> Запустит 3 реплики <i>orders-service</i> и <i>payments-service</i>
 ```sh
 minikube start
 ./k8s/build-images.sh

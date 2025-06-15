@@ -26,9 +26,5 @@ func NewDb(config *Config) (*sql.DB, error) {
 		return nil, err
 	}
 
-	if err := RunMigrations(db); err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
-
 	return db, nil
 }

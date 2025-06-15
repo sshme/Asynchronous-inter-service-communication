@@ -26,6 +26,8 @@ import (
 	"log"
 	"net/http"
 	"orders-service/internal/application/di"
+	"orders-service/internal/infrastructure/config"
+	"orders-service/internal/infrastructure/persistence/postgres"
 	"os"
 	"os/signal"
 	"syscall"
@@ -35,10 +37,37 @@ import (
 )
 
 func main() {
-	app, err := di.InitializeApplication()
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		runMigrations()
+		return
+	}
+
+	runServer()
+}
+
+func runMigrations() {
+	fmt.Println("Starting database migration...")
+	// We need to load config just for the database
+	cfg := config.MustLoad(config.NewApp("config/config.yaml"))
+	dbConf := di.NewPostgresConfig(cfg)
+	db, err := postgres.NewDb(dbConf)
+	if err != nil {
+		log.Fatalf("failed to connect to database for migration: %v", err)
+	}
+	defer db.Close()
+
+	if err := postgres.RunMigrations(db); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
+	fmt.Println("Migrations completed successfully.")
+}
+
+func runServer() {
+	app, cleanup, err := di.InitializeApplication()
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
+	defer cleanup()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

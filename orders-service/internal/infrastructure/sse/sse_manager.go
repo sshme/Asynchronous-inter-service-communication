@@ -6,48 +6,59 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"orders-service/internal/domain/orders"
+	"orders-service/internal/domain/dto"
+	"orders-service/internal/infrastructure/pubsub/redis"
 	"sync"
 	"time"
 )
 
-type OrderStatusEvent struct {
-	ID          string             `json:"id"`
-	UserID      string             `json:"userID"`
-	Amount      float64            `json:"amount"`
-	Currency    string             `json:"currency"`
-	Status      orders.OrderStatus `json:"status"`
-	PaymentID   string             `json:"paymentID"`
-	ErrorReason string             `json:"errorReason"`
-	CreatedAt   time.Time          `json:"createdAt"`
-	UpdatedAt   time.Time          `json:"updatedAt"`
-}
-
+// Client represents a single SSE client connection.
 type Client struct {
 	ID     string
 	UserID string
-	Events chan OrderStatusEvent
+	Events chan *dto.SSEMessage
 	Done   chan bool
 }
 
+// Manager handles all SSE client connections.
 type Manager struct {
 	clients    map[string]*Client
 	register   chan *Client
 	unregister chan *Client
-	broadcast  chan OrderStatusEvent
+	subscriber *redis.Subscriber
 	mutex      sync.RWMutex
 }
 
-func NewManager() *Manager {
+// NewManager creates a new SSE Manager.
+func NewManager(subscriber *redis.Subscriber) *Manager {
 	return &Manager{
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		broadcast:  make(chan OrderStatusEvent, 100),
+		subscriber: subscriber,
 	}
 }
 
+// handleRedisMessage is the handler for messages received from the Redis subscriber.
+func (m *Manager) handleRedisMessage(message *dto.SSEMessage) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	for _, client := range m.clients {
+		if client.UserID == message.UserID {
+			select {
+			case client.Events <- message:
+			case <-time.After(time.Second):
+				log.Printf("SSE client %s event channel is full. Skipping message.", client.ID)
+			}
+		}
+	}
+}
+
+// Start begins the SSE manager's event loop.
 func (m *Manager) Start(ctx context.Context) {
+	go m.subscriber.Subscribe(ctx, m.handleRedisMessage)
+
 	go func() {
 		for {
 			select {
@@ -67,22 +78,6 @@ func (m *Manager) Start(ctx context.Context) {
 				m.mutex.Unlock()
 				log.Printf("SSE client unregistered: %s", client.ID)
 
-			case event := <-m.broadcast:
-				m.mutex.RLock()
-				for _, client := range m.clients {
-					if client.UserID == event.UserID {
-						select {
-						case client.Events <- event:
-						case <-time.After(time.Second * 5):
-							log.Printf("Removing unresponsive SSE client: %s", client.ID)
-							go func(c *Client) {
-								m.unregister <- c
-							}(client)
-						}
-					}
-				}
-				m.mutex.RUnlock()
-
 			case <-ctx.Done():
 				m.mutex.Lock()
 				for _, client := range m.clients {
@@ -91,48 +86,31 @@ func (m *Manager) Start(ctx context.Context) {
 				}
 				m.clients = make(map[string]*Client)
 				m.mutex.Unlock()
+				log.Println("SSE Manager shutting down.")
 				return
 			}
 		}
 	}()
 }
 
+// RegisterClient creates and registers a new SSE client.
 func (m *Manager) RegisterClient(clientID, userID string) *Client {
 	client := &Client{
 		ID:     clientID,
 		UserID: userID,
-		Events: make(chan OrderStatusEvent, 10),
+		Events: make(chan *dto.SSEMessage, 10),
 		Done:   make(chan bool),
 	}
-
 	m.register <- client
 	return client
 }
 
+// UnregisterClient unregisters an SSE client.
 func (m *Manager) UnregisterClient(client *Client) {
 	m.unregister <- client
 }
 
-func (m *Manager) BroadcastOrderUpdate(order *orders.Order) {
-	event := OrderStatusEvent{
-		ID:          order.ID,
-		UserID:      order.UserID,
-		Amount:      order.Amount,
-		Currency:    order.Currency,
-		Status:      order.Status,
-		PaymentID:   order.PaymentID,
-		ErrorReason: order.ErrorReason,
-		CreatedAt:   order.CreatedAt,
-		UpdatedAt:   order.UpdatedAt,
-	}
-
-	select {
-	case m.broadcast <- event:
-	case <-time.After(time.Second):
-		log.Printf("Failed to broadcast order update due to timeout: OrderID=%s", order.ID)
-	}
-}
-
+// HandleSSE is the HTTP handler for new SSE connections.
 func (m *Manager) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
@@ -146,42 +124,46 @@ func (m *Manager) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Cache-Control")
 
 	clientID := fmt.Sprintf("%s-%d", userID, time.Now().UnixNano())
-
 	client := m.RegisterClient(clientID, userID)
 	defer m.UnregisterClient(client)
 
-	fmt.Fprintf(w, "event: connected\n")
-	fmt.Fprintf(w, "data: {\"message\": \"Connected to order status updates\", \"user_id\": \"%s\"}\n\n", userID)
+	// Send a connected message
+	connectedMsg := map[string]string{"message": "Connected to order status updates", "user_id": userID}
+	connectedEvent := &dto.SSEMessage{UserID: userID, Event: "connected", Payload: connectedMsg}
 
+	eventData, _ := json.Marshal(connectedEvent.Payload)
+	fmt.Fprintf(w, "event: %s\n", connectedEvent.Event)
+	fmt.Fprintf(w, "data: %s\n\n", eventData)
 	if flusher, ok := w.(http.Flusher); ok {
 		flusher.Flush()
 	}
 
 	for {
 		select {
-		case event := <-client.Events:
-			log.Printf("Sending SSE event to client %s: %+v", client.ID, event)
+		case msg := <-client.Events:
+			log.Printf("Sending SSE event '%s' to client %s", msg.Event, client.ID)
 
-			eventData, err := json.Marshal(event)
+			payloadData, err := json.Marshal(msg.Payload)
 			if err != nil {
-				log.Printf("Failed to marshal SSE event: %v", err)
+				log.Printf("Failed to marshal SSE payload: %v", err)
 				continue
 			}
 
-			fmt.Fprintf(w, "event: order-update\n")
-			fmt.Fprintf(w, "data: %s\n\n", eventData)
+			fmt.Fprintf(w, "event: %s\n", msg.Event)
+			fmt.Fprintf(w, "data: %s\n\n", payloadData)
 
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
 			}
 
 		case <-client.Done:
+			log.Printf("Client %s done.", client.ID)
 			return
 
 		case <-r.Context().Done():
+			log.Printf("Client %s connection closed by remote.", client.ID)
 			return
 		}
 	}

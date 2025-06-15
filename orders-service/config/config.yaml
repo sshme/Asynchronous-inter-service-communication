@@ -13,3 +13,7 @@ kafka:
     max_retries: 3
   brokers:
     - "kafka:29092"
+redis:
+  host: redis
+  port: 6379
+  channel: "sse-updates"

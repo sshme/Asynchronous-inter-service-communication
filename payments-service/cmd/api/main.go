@@ -36,14 +36,34 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		runMigrations()
+		return
+	}
+
+	runServer()
+}
+
+func runMigrations() {
+	fmt.Println("Starting database migration for payments-service...")
+
 	app, err := di.InitializeApplication()
 	if err != nil {
-		log.Fatalf("Failed to initialize application: %v", err)
+		log.Fatalf("Failed to initialize application for migration: %v", err)
 	}
 
 	migrationsPath := "internal/infrastructure/persistence/postgres/migrations"
 	if err := postgres.RunMigrations(app.DB, migrationsPath); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	fmt.Println("Payments service migrations completed successfully.")
+}
+
+func runServer() {
+	app, err := di.InitializeApplication()
+	if err != nil {
+		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

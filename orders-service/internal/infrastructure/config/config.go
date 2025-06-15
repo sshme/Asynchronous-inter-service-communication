@@ -8,25 +8,45 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type Server struct {
+	Port int `yaml:"port"`
+}
+
+type Db struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+	User string `yaml:"user"`
+	Pass string `yaml:"pass"`
+	Name string `yaml:"name"`
+}
+
+type KafkaPublisher struct {
+	IntervalMs int `yaml:"interval_ms"`
+	BatchSize  int `yaml:"batch_size"`
+	MaxRetries int `yaml:"max_retries"`
+}
+
+type KafkaConsumer struct {
+	GroupID string `yaml:"group_id"`
+}
+
+type Kafka struct {
+	Publisher KafkaPublisher `yaml:"publisher"`
+	Consumer  KafkaConsumer  `yaml:"consumer"`
+	Brokers   []string       `yaml:"brokers"`
+}
+
+type Redis struct {
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
+	Channel string `yaml:"channel"`
+}
+
 type Config struct {
-	Server struct {
-		Port int `yaml:"port"`
-	} `yaml:"server"`
-	Db struct {
-		Host string `yaml:"host"`
-		Port int    `yaml:"port"`
-		User string `yaml:"user"`
-		Pass string `yaml:"pass"`
-		Name string `yaml:"name"`
-	} `yaml:"db"`
-	Kafka struct {
-		Publisher struct {
-			IntervalMs int `yaml:"interval_ms"`
-			BatchSize  int `yaml:"batch_size"`
-			MaxRetries int `yaml:"max_retries"`
-		} `yaml:"publisher"`
-		Brokers []string `yaml:"brokers"`
-	} `yaml:"kafka"`
+	Server Server `yaml:"server"`
+	Db     Db     `yaml:"db"`
+	Kafka  Kafka  `yaml:"kafka"`
+	Redis  Redis  `yaml:"redis"`
 }
 
 func (c *Config) GetPublisherInterval() time.Duration {
@@ -79,4 +99,12 @@ func MustLoad(app *App) *Config {
 	}
 
 	return &config
+}
+
+func (k *Kafka) GetBrokers() []string {
+	return k.Brokers
+}
+
+func (k *Kafka) GetPaymentsEventsTopic() string {
+	return "payments.events"
 }

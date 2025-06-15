@@ -1,34 +1,44 @@
 #!/bin/bash
 
-# This script deploys the microservices to Kubernetes.
-# It should be run from the root of the project.
+# This script deploys the application to Kubernetes.
 
 echo "Deploying to Kubernetes..."
 
-echo "Applying Kubernetes manifests..."
+echo "Applying namespace..."
 kubectl apply -f k8s/manifests/namespace.yaml
-echo "Waiting for namespace to be created..."
-sleep 5
 
-# Apply all other manifests
+echo "Waiting for namespace to be created..."
+sleep 5 
+
+# Apply CRDs, RBAC, and other fundamental configs first
 kubectl apply -f k8s/manifests/traefik-rbac.yaml
 kubectl apply -f k8s/manifests/traefik.yaml
 kubectl apply -f k8s/manifests/orders-db.yaml
 kubectl apply -f k8s/manifests/payments-db.yaml
 kubectl apply -f k8s/manifests/kafka.yaml
-kubectl apply -f k8s/manifests/orders-service-config.yaml
-kubectl apply -f k8s/manifests/payments-service-config.yaml
-kubectl apply -f k8s/manifests/orders-service.yaml
-kubectl apply -f k8s/manifests/payments-service.yaml
-kubectl apply -f k8s/manifests/ingress.yaml
+kubectl apply -f k8s/manifests/redis.yaml
 
-# Apply the client last
-kubectl apply -f k8s/manifests/orders-client.yaml
+echo "Waiting for databases and Kafka to be ready..."
+kubectl wait --for=condition=ready pod/orders-db-0 -n microservices --timeout=120s
+kubectl wait --for=condition=ready pod/payments-db-0 -n microservices --timeout=120s
+kubectl wait --for=condition=ready pod/kafka-0 -n microservices --timeout=180s
 
+# Run the database migration jobs
+echo "Running database migration jobs..."
+kubectl apply -f k8s/manifests/migration-job.yaml
+kubectl apply -f k8s/manifests/payments-migration-job.yaml
+
+echo "Waiting for migration jobs to complete..."
+kubectl wait --for=condition=complete job/orders-service-migration -n microservices --timeout=120s
+kubectl wait --for=condition=complete job/payments-service-migration -n microservices --timeout=120s
+
+echo "Applying application services and ingress..."
+kubectl apply -R -f k8s/manifests/
+
+sleep 10
 kubectl apply -f k8s/manifests/deployments.yaml
 
 echo "Deployment complete."
-MINIKUBE_IP=$(minikube ip)
 echo "Run 'minikube tunnel' in a separate terminal."
-echo "The application at http://localhost (or http://$MINIKUBE_IP if tunnel doesn't work)"
-echo "Traefik dashboard at http://localhost:8080" 
+echo "Then you can access the application at http://localhost (or the minikube IP)"
+echo "You can access the Traefik dashboard at http://localhost:8080" 

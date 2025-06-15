@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"log"
 
+	"orders-service/internal/domain/dto"
 	"orders-service/internal/domain/inbox"
 	"orders-service/internal/domain/orders"
 	"orders-service/internal/domain/outbox"
-	"orders-service/internal/infrastructure/sse"
+	"orders-service/internal/infrastructure/pubsub/redis"
 	"orders-service/internal/interfaces/repository"
 	"orders-service/pkg/random"
 )
@@ -19,26 +20,34 @@ type OrdersService struct {
 	randomGenerator  random.Generator
 	ordersRepository repository.OrdersRepository
 	outboxRepository repository.OutboxRepository
-	inboxRepository  repository.InboxRepository
-	sseManager       *sse.Manager
+	redisPublisher   *redis.Publisher
 	db               *sql.DB
 }
 
 func NewOrdersService(
 	ordersRepository repository.OrdersRepository,
 	outboxRepository repository.OutboxRepository,
-	inboxRepository repository.InboxRepository,
 	randomGenerator random.Generator,
-	sseManager *sse.Manager,
+	redisPublisher *redis.Publisher,
 	db *sql.DB,
 ) *OrdersService {
 	return &OrdersService{
 		ordersRepository: ordersRepository,
 		outboxRepository: outboxRepository,
-		inboxRepository:  inboxRepository,
 		randomGenerator:  randomGenerator,
-		sseManager:       sseManager,
+		redisPublisher:   redisPublisher,
 		db:               db,
+	}
+}
+
+func (s *OrdersService) publishOrderUpdate(ctx context.Context, order *orders.Order) {
+	sseMessage := &dto.SSEMessage{
+		UserID:  order.UserID,
+		Event:   "order-update",
+		Payload: order,
+	}
+	if err := s.redisPublisher.Publish(ctx, sseMessage); err != nil {
+		log.Printf("Failed to publish order update to Redis: %v", err)
 	}
 }
 
@@ -99,9 +108,7 @@ func (s *OrdersService) CreateOrder(ctx context.Context, userID string) (*orders
 	log.Printf("Order created successfully: OrderID=%s, UserID=%s, Amount=%.2f %s",
 		order.ID, order.UserID, order.Amount, order.Currency)
 
-	if s.sseManager != nil {
-		s.sseManager.BroadcastOrderUpdate(order)
-	}
+	s.publishOrderUpdate(ctx, order)
 
 	return order, nil
 }
@@ -170,9 +177,7 @@ func (s *OrdersService) ProcessPaymentCompleted(ctx context.Context, inboxMessag
 
 	log.Printf("Order marked as paid successfully: OrderID=%s, PaymentID=%s", order.ID, order.PaymentID)
 
-	if s.sseManager != nil {
-		s.sseManager.BroadcastOrderUpdate(order)
-	}
+	s.publishOrderUpdate(ctx, order)
 
 	return nil
 }
@@ -229,9 +234,7 @@ func (s *OrdersService) ProcessPaymentFailed(ctx context.Context, inboxMessage *
 
 	log.Printf("Order marked as payment failed: OrderID=%s, Reason=%s", order.ID, order.ErrorReason)
 
-	if s.sseManager != nil {
-		s.sseManager.BroadcastOrderUpdate(order)
-	}
+	s.publishOrderUpdate(ctx, order)
 
 	return nil
 }

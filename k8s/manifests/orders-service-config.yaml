@@ -16,3 +16,7 @@ data:
     kafka:
       brokers:
         - "kafka:9092" 
+    redis:
+      host: "redis"
+      port: 6379
+      channel: "orders_updates"

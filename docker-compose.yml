@@ -95,17 +95,36 @@ services:
       - microservices_network
     restart: unless-stopped
 
-  # Microservices
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - microservices_network
+    restart: unless-stopped
+
+  orders-migrator:
+    build: ./orders-service
+    command: ["./api", "migrate"]
+    networks:
+      - microservices_network
+    depends_on:
+      orders-db:
+        condition: service_healthy
+
   orders-service:
     build: ./orders-service
     container_name: orders-service
     networks:
       - microservices_network
     depends_on:
-      orders-db:
-        condition: service_started
+      orders-migrator:
+        condition: service_completed_successfully
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_started
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.orders.loadbalancer.server.port=8000"
@@ -123,15 +142,29 @@ services:
     networks:
       - microservices_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orders_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
   
+  payments-migrator:
+    build: ./payments-service
+    command: ["./api", "migrate"]
+    networks:
+      - microservices_network
+    depends_on:
+      payments-db:
+        condition: service_healthy
+
   payments-service:
     build: ./payments-service
     container_name: payments-service
     networks:
       - microservices_network
     depends_on:
-      payments-db:
-        condition: service_started
+      payments-migrator:
+        condition: service_completed_successfully
       kafka:
         condition: service_healthy
     labels:
@@ -151,6 +184,11 @@ services:
     networks:
       - microservices_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payments_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   microservices_network:
