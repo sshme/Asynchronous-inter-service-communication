@@ -25,7 +25,7 @@ kubectl wait --for=condition=ready pod/kafka-0 -n microservices --timeout=1800s
 
 # Run the database migration jobs
 echo "Running database migration jobs..."
-kubectl apply -f k8s/manifests/migration-job.yaml
+kubectl apply -f k8s/manifests/orders-migration-job.yaml
 kubectl apply -f k8s/manifests/payments-migration-job.yaml
 
 echo "Waiting for migration jobs to complete..."

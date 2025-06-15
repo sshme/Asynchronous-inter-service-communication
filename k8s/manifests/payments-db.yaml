@@ -35,6 +35,11 @@ spec:
         ports:
         - containerPort: 5432
           name: postgres
+        readinessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 5
+          periodSeconds: 10
         env:
         - name: POSTGRES_DB
           value: "payments_db"

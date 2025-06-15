@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"payments-service/internal/application/di"
+	"payments-service/internal/infrastructure/config"
 	"payments-service/internal/infrastructure/persistence/postgres"
 	"syscall"
 	"time"
@@ -45,19 +46,19 @@ func main() {
 }
 
 func runMigrations() {
-	fmt.Println("Starting database migration for payments-service...")
-
-	app, err := di.InitializeApplication()
+	fmt.Println("Starting database migration...")
+	cfg := config.MustLoad(config.NewApp("config/config.yaml"))
+	dbConf := di.NewPostgresConfig(cfg)
+	db, err := postgres.NewDb(dbConf)
 	if err != nil {
-		log.Fatalf("Failed to initialize application for migration: %v", err)
+		log.Fatalf("failed to connect to database for migration: %v", err)
 	}
+	defer db.Close()
 
-	migrationsPath := "internal/infrastructure/persistence/postgres/migrations"
-	if err := postgres.RunMigrations(app.DB, migrationsPath); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+	if err := postgres.RunMigrations(db); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
 	}
-
-	fmt.Println("Payments service migrations completed successfully.")
+	fmt.Println("Migrations completed successfully.")
 }
 
 func runServer() {

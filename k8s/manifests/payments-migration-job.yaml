@@ -9,15 +9,7 @@ spec:
       containers:
       - name: migrator
         image: payments-service:latest
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         command: ["./api", "migrate"]
-        volumeMounts:
-        - name: config
-          mountPath: "/app/config"
-          readOnly: true
-      volumes:
-      - name: config
-        configMap:
-          name: payments-service-config
       restartPolicy: Never
   backoffLimit: 4 

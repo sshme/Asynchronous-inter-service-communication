@@ -47,7 +47,6 @@ func main() {
 
 func runMigrations() {
 	fmt.Println("Starting database migration...")
-	// We need to load config just for the database
 	cfg := config.MustLoad(config.NewApp("config/config.yaml"))
 	dbConf := di.NewPostgresConfig(cfg)
 	db, err := postgres.NewDb(dbConf)

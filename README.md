@@ -104,7 +104,8 @@ docker-compose up
 > Запустит 3 реплики <i>orders-service</i> и <i>payments-service</i>
 ```sh
 minikube start
-./k8s/build-images.sh
-./k8s/deploy.sh
+./k8s/build-images.sh # сборка
+./k8s/deploy.sh # применение команд для k8s
+kubectl get pods -n microservices  # дождитесь, пока все сервисы не будут RUNNING
 minikube tunnel
 ```
