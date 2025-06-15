@@ -16,6 +16,7 @@ import (
 	"orders-service/internal/infrastructure/persistence/postgres"
 	redispubsub "orders-service/internal/infrastructure/pubsub/redis"
 	"orders-service/internal/infrastructure/sse"
+	"orders-service/internal/interfaces/api/handler"
 	"orders-service/internal/interfaces/api/router"
 	"orders-service/internal/interfaces/repository"
 	"orders-service/pkg/random"
@@ -41,6 +42,7 @@ func InitializeApplication() (*Application, func(), error) {
 		redispubsub.NewSubscriber,
 		sse.NewManager,
 		service.NewOrdersService,
+		wire.Bind(new(handler.OrdersServicer), new(*service.OrdersService)),
 		router.NewRouter,
 		NewApplication,
 	)

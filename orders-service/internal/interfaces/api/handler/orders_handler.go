@@ -4,16 +4,15 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"orders-service/internal/application/service"
 	"orders-service/internal/infrastructure/sse"
 )
 
 type OrdersHandler struct {
-	ordersService *service.OrdersService
+	ordersService OrdersServicer
 	sseManager    *sse.Manager
 }
 
-func NewOrdersHandler(ordersService *service.OrdersService, sseManager *sse.Manager) *OrdersHandler {
+func NewOrdersHandler(ordersService OrdersServicer, sseManager *sse.Manager) *OrdersHandler {
 	return &OrdersHandler{
 		ordersService: ordersService,
 		sseManager:    sseManager,
