@@ -27,6 +27,7 @@ func (r *Router) SetupRoutes() http.Handler {
 
 	mux.HandleFunc("GET /orders-api/docs/", r.docsHandler.Docs)
 	mux.HandleFunc("GET /orders-api/docs/swagger.json", r.docsHandler.Swagger)
+	mux.HandleFunc("GET /orders-api/scalar", r.docsHandler.ScalarReference)
 
 	mux.HandleFunc("POST /orders-api/orders", r.ordersHandler.CreateOrder)
 

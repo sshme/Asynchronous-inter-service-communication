@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/MarceloPetrucio/go-scalar-api-reference"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"github.com/swaggo/swag"
 )
@@ -27,4 +28,17 @@ func (h *DocsHandler) Swagger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, "./docs/swagger.json")
+}
+
+func (h *DocsHandler) ScalarReference(w http.ResponseWriter, r *http.Request) {
+	htmlContent, err := scalar.ApiReferenceHTML(&scalar.Options{
+		SpecURL:  "./docs/swagger.json",
+		DarkMode: true,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Write([]byte(htmlContent))
 }
